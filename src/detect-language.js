@@ -9,7 +9,7 @@ const { IamAuthenticator } = require('ibm-watson/auth');
  */
 function getTheErrorResponse(errorMessage, defaultLanguage) {
     return {
-        statusCode: 200,
+        statusCode: 500,
         body: {
             language: defaultLanguage || 'en',
             errorMessage: errorMessage
@@ -67,6 +67,7 @@ function main(params) {
                         body: {
                             text: params.text,
                             language: identifiedLanguages.result.languages[0].language,
+                            toLanguage: params.toLanguage,
                             confidence: identifiedLanguages.result.languages[0].confidence,
                         },
                         headers: { 'Content-Type': 'application/json' }

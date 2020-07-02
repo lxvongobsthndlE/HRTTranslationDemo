@@ -9,7 +9,7 @@ const { IamAuthenticator } = require('ibm-watson/auth');
  */
 function getTheErrorResponse(errorMessage, defaultLanguage) {
     return {
-        statusCode: 200,
+        statusCode: 500,
         body: {
             language: defaultLanguage || 'en',
             errorMessage: errorMessage
@@ -59,19 +59,84 @@ function main(params) {
             });
 
             var textToTranslate = params.body.text;
+            var sourceLanguage = params.body.language;
+            var toLanguage = params.body.toLanguage || "en";
             console.log(JSON.stringify(params, null, 2));
-            const translateParams = {
+            var translateParams = {
                 text: textToTranslate,
-                modelId: params.body.language + "-en",
+                modelId: sourceLanguage + "-" + toLanguage,
             };
 
-            if (params.body.language !== "en") {
-                languageTranslator.translate(translateParams)
+            if (sourceLanguage === toLanguage) {
+                resolve({
+                    statusCode: 200,
+                    body: {
+                        translations: textToTranslate,
+                        words: textToTranslate.split(" ").length,
+                        characters: textToTranslate.length,
+                    },
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+            else {
+                if (sourceLanguage !== "en") {
+                    translateParams = {
+                        text: textToTranslate,
+                        modelId: sourceLanguage + "-en",
+                    };
+                    languageTranslator.translate(translateParams)
+                        .then(translationResult => {
+                            console.log(JSON.stringify(translationResult, null, 2));
+                            textToTranslate = translationResult.result.translations[0].translation;
+
+                            if (toLanguage === "en") {
+                                resolve({
+                                    statusCode: 200,
+                                    body: {
+                                        translations: textToTranslate,
+                                        words: textToTranslate.split(" ").length,
+                                        characters: textToTranslate.length,
+                                    },
+                                    headers: { 'Content-Type': 'application/json' }
+                                });
+                            }
+                            else {
+                                translateParams = {
+                                    text: textToTranslate,
+                                    modelId: "en-" + toLanguage,
+                                }
+                                languageTranslator.translate(translateParams)
+                                    .then(translationResult2 => {
+                                        console.log(JSON.stringify(translationResult2, null, 2));
+                                        textToTranslate = translationResult2.result.translations[0].translation;
+
+                                        resolve({
+                                            statusCode: 200,
+                                            body: {
+                                                translations: textToTranslate,
+                                                words: translationResult2.result.word_count,
+                                                characters: translationResult2.result.character_count,
+                                            },
+                                            headers: { 'Content-Type': 'application/json' }
+                                        });
+                                    })
+                                    .catch(err => {
+                                        console.log('error:', err);
+                                        resolve(getErrorResponse(err.result.message, defaultLanguage))
+                                    });
+                            }
+                        })
+                        .catch(err => {
+                            console.log('error:', err);
+                            resolve(getErrorResponse(err.result.message, defaultLanguage))
+                        });
+                }
+                else {
+                    languageTranslator.translate(translateParams)
                     .then(translationResult => {
                         console.log(JSON.stringify(translationResult, null, 2));
-                        //if (params.body.language.confidence > 0.5) {
                         textToTranslate = translationResult.result.translations[0].translation;
-                        //}
+
                         resolve({
                             statusCode: 200,
                             body: {
@@ -86,17 +151,8 @@ function main(params) {
                         console.log('error:', err);
                         resolve(getErrorResponse(err.result.message, defaultLanguage))
                     });
-            }
-            else {
-                resolve({
-                    statusCode: 200,
-                    body: {
-                        translations: params.body.text,
-                        words: params.body.text.split(" ").length,
-                        characters: params.body.text.length,
-                    },
-                    headers: { 'Content-Type': 'application/json' }
-                });
+                }
+                
             }
 
         } catch (err) {
